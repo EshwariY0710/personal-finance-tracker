@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Finance Tracker</title>
+    <!-- Firebase JS SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Link external CSS -->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7fc;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background-color: #4CAF50;
+            padding: 15px;
+            text-align: center;
+            color: white;
+        }
+
+        h1 {
+            margin: 0;
+        }
+
+        main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        #dashboard-section {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            margin-bottom: 15px;
+        }
+
+        p {
+            font-size: 1.1em;
+        }
+
+        input,
+        select,
+        button {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+        }
+
+        table th,
+        table td {
+            padding: 12px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+
+        table th {
+            background-color: #f2f2f2;
+        }
+
+        canvas {
+            max-width: 100%;
+            height: 300px;
+            margin-top: 20px;
+        }
+
+        button {
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        /* Responsive Design */
+        @media screen and (max-width: 768px) {
+            main {
+                padding: 10px;
+            }
+
+            table,
+            .transaction-form {
+                width: 100%;
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>Personal Finance Tracker</h1>
+    </header>
+    <main>
+        <div id="dashboard-section">
+            <h2>Dashboard</h2>
+            <p id="user-email">Welcome, User</p>
+            <p id="balance">Balance: $0.00</p>
+
+            <div>
+                <p id="total-income">Total Income: $0.00</p>
+                <p id="total-expenses">Total Expenses: $0.00</p>
+            </div>
+
+            <canvas id="incomeExpenseChart"></canvas>
+
+            <button id="logout">Logout</button>
+
+            <h2>Add Transaction</h2>
+            <form id="transaction-form" class="transaction-form">
+                <label for="date">Date</label>
+                <input type="date" id="date" required>
+                <label for="description">Description</label>
+                <input type="text" id="description" placeholder="Transaction description" required>
+                <label for="amount">Amount</label>
+                <input type="number" id="amount" placeholder="Amount" required>
+                <label for="type">Type</label>
+                <select id="type">
+                    <option value="income">Income</option>
+                    <option value="expense">Expense</option>
+                </select>
+                <button type="submit">Add Transaction</button>
+            </form>
+
+            <h2>Transaction History</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Amount</th>
+                        <th>Type</th>
+                    </tr>
+                </thead>
+                <tbody id="transaction-history"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        // Initialize localStorage if it's the first time
+        if (!localStorage.getItem("transactions")) {
+            localStorage.setItem("transactions", JSON.stringify([]));
+        }
+
+        // Load transactions from localStorage
+        loadTransactions();
+
+        // Transaction Form Submission
+        document.getElementById("transaction-form").addEventListener("submit", (e) => {
+            e.preventDefault();
+            const date = document.getElementById("date").value;
+            const description = document.getElementById("description").value;
+            const amount = parseFloat(document.getElementById("amount").value);
+            const type = document.getElementById("type").value;
+
+            if (!date || !description || isNaN(amount)) {
+                alert("Please fill in all fields correctly.");
+                return;
+            }
+
+            // Store transaction in localStorage
+            const transaction = { date, description, amount, type };
+            const transactions = JSON.parse(localStorage.getItem("transactions"));
+            transactions.push(transaction);
+            localStorage.setItem("transactions", JSON.stringify(transactions));
+
+            alert("Transaction added successfully!");
+            loadTransactions();
+        });
+
+        // Load Transactions and Update Dashboard
+        function loadTransactions() {
+            const transactions = JSON.parse(localStorage.getItem("transactions"));
+            const tableBody = document.getElementById("transaction-history");
+            tableBody.innerHTML = "";
+            let balance = 0, income = 0, expense = 0;
+
+            transactions.forEach(({ date, description, amount, type }) => {
+                balance += type === "income" ? amount : -amount;
+                if (type === "income") income += amount;
+                if (type === "expense") expense += amount;
+
+                tableBody.innerHTML += `<tr>
+                    <td>${date}</td>
+                    <td>${description}</td>
+                    <td>$${amount.toFixed(2)}</td>
+                    <td>${type}</td>
+                </tr>`;
+            });
+
+            // Update the Balance, Income, Expenses
+            document.getElementById("balance").textContent = `Balance: $${balance.toFixed(2)}`;
+            document.getElementById("total-income").textContent = `Total Income: $${income.toFixed(2)}`;
+            document.getElementById("total-expenses").textContent = `Total Expenses: $${expense.toFixed(2)}`;
+
+            renderChart(income, expense);
+        }
+
+        // Render Income vs Expense Chart
+        function renderChart(income, expense) {
+            const ctx = document.getElementById("incomeExpenseChart").getContext("2d");
+            new Chart(ctx, {
+                type: "doughnut",
+                data: {
+                    labels: ["Income", "Expense"],
+                    datasets: [{
+                        data: [income, expense],
+                        backgroundColor: ["#4CAF50", "#FF5733"]
+                    }]
+                }
+            });
+        }
+
+        // Logout Button Click Event
+        document.getElementById("logout").addEventListener("click", () => {
+            alert("You have logged out!");
+            localStorage.clear();  // Clear localStorage when logging out
+            window.location.reload(); // Reload to reset everything
+        });
+    </script>
+</body>
+
+</html>
